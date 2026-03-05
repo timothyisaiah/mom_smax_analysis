@@ -88,11 +88,12 @@ def run():
     # Sidebar: file and targets
     with st.sidebar:
         st.subheader("Settings")
+        uploaded = st.file_uploader("Upload CSV", type=["csv"])
         default_path = Path(__file__).parent / "Request_20260304_1010302318309310430531382643.csv"
         csv_path = st.text_input(
-            "CSV path",
+            "Or CSV path (server/local run)",
             value=str(default_path),
-            help="Path to request/export CSV with CreateTime, AssignedToPerson.Name, Status",
+            help="On Streamlit Cloud, use the uploader above. This path is only valid on the machine running the app.",
         )
         ticket_target = st.number_input("Tickets target per month", min_value=1, value=TICKET_TARGET)
         resolution_target = st.number_input(
@@ -101,7 +102,10 @@ def run():
 
     ticket_target = int(ticket_target)
     try:
-        df = load_data(csv_path)
+        if uploaded is not None:
+            df = pd.read_csv(uploaded)
+        else:
+            df = load_data(csv_path)
     except Exception as e:
         st.error(f"Could not load data: {e}")
         return
