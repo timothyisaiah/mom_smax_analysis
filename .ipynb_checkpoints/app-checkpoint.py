@@ -120,8 +120,7 @@ def run():
         )
     # Resolve selection: empty means all assignees
     assignees_in_scope = selected_assignees if selected_assignees else all_assignees
-    # Compound volume target: 140 × number of assignees, capped at 420
-    effective_volume_target = min(ticket_target * len(assignees_in_scope), 420)
+    effective_volume_target = ticket_target * len(assignees_in_scope)
     with col2:
         months = sorted(agg["month"].unique())
         if months:
@@ -180,11 +179,7 @@ def run():
             vol_ok = "Yes" if last["tickets"] >= effective_volume_target else "No"
             res_ok = "Yes" if last["resolution_pct"] >= resolution_target else "No"
             st.metric("Targets (Volume / Resolution)", f"{vol_ok} / {res_ok}", None)
-        st.caption(
-            "Volume target: **{0}** (140 × {1} assignee(s), capped at 420)".format(
-                effective_volume_target, len(assignees_in_scope)
-            )
-        )
+        st.caption(f"Volume target: **{effective_volume_target}** (140 × {len(assignees_in_scope)} assignee(s))")
 
     # Table: MoM breakdown (hide assignee column only when exactly one selected)
     display_cols = ["month_label", ASSIGNEE_COL, "tickets", "completed", "resolution_pct_display"]
@@ -196,7 +191,7 @@ def run():
         ASSIGNEE_COL: "Assignee",
         "resolution_pct_display": "Resolution %",
     })
-    st.dataframe(table_df, width="stretch", hide_index=True)
+    st.dataframe(table_df, use_container_width=True, hide_index=True)
 
     # MoM chart: tickets by month (sum when multiple assignees)
     if len(assignees_in_scope) == 1:
@@ -221,7 +216,7 @@ def run():
     compliance = compliance.rename(columns={ASSIGNEE_COL: "Assignee"})
     compliance["Volume %"] = (compliance["volume_ok"] / compliance["months"] * 100).round(1)
     compliance["Resolution %"] = (compliance["resolution_ok"] / compliance["months"] * 100).round(1)
-    st.dataframe(compliance, width="stretch", hide_index=True)
+    st.dataframe(compliance, use_container_width=True, hide_index=True)
 
     # Export
     st.download_button(
