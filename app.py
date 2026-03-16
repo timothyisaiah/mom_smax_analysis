@@ -173,17 +173,20 @@ def run():
 
     if not sub.empty:
         last = sub.iloc[-1]
-        c1, c2, c3, c4 = st.columns(4)
+        vol_pct = (last["tickets"] / effective_volume_target * 100) if effective_volume_target > 0 else 0
+        c1, c2, c3, c4, c5 = st.columns(5)
         with c1:
             st.metric("Last month tickets", int(last["tickets"]), None)
         with c2:
             st.metric("Last month completed", int(last["completed"]), None)
         with c3:
-            st.metric("Last month resolution %", f"{last['resolution_pct_display']:.1f}%", None)
+            st.metric("Volume %", f"{vol_pct:.1f}%", None)
         with c4:
+            st.metric("Resolution %", f"{last['resolution_pct_display']:.1f}%", None)
+        with c5:
             vol_ok = "Yes" if last["tickets"] >= effective_volume_target else "No"
             res_ok = "Yes" if last["resolution_pct"] >= resolution_target else "No"
-            st.metric("Targets (Volume / Resolution)", f"{vol_ok} / {res_ok}", None)
+            st.metric("Targets (Vol / Res)", f"{vol_ok} / {res_ok}", None)
         st.caption(
             "Volume target: **{0}** (140 × {1} assignee(s), capped at 420)".format(
                 effective_volume_target, len(assignees_in_scope)
