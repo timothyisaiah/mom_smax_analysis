@@ -80,6 +80,62 @@ def mom_summary(agg: pd.DataFrame, assignees: list[str] | None) -> pd.DataFrame:
     return agg
 
 
+def _build_ranking(
+    view: pd.DataFrame,
+    ticket_target: int,
+    resolution_target: float,
+) -> pd.DataFrame:
+    """
+    Rank analysts by a composite score (0-100) that equally weights:
+      1. Normalised average monthly tickets
+      2. Average resolution %
+      3. Volume-target hit rate  (% of months meeting volume target)
+      4. Resolution-target hit rate (% of months meeting resolution target)
+    """
+    if view.empty or ASSIGNEE_COL not in view.columns:
+        return pd.DataFrame()
+
+    grp = view.groupby(ASSIGNEE_COL).agg(
+        months=("month", "count"),
+        total_tickets=("tickets", "sum"),
+        total_completed=("completed", "sum"),
+        volume_ok=("meets_volume_target", "sum"),
+        resolution_ok=("meets_resolution_target", "sum"),
+    ).reset_index()
+
+    grp["avg_tickets"] = grp["total_tickets"] / grp["months"]
+    grp["avg_resolution"] = (grp["total_completed"] / grp["total_tickets"] * 100).round(1)
+    grp["vol_hit"] = (grp["volume_ok"] / grp["months"] * 100).round(1)
+    grp["res_hit"] = (grp["resolution_ok"] / grp["months"] * 100).round(1)
+
+    max_tickets = grp["avg_tickets"].max()
+    grp["norm_tickets"] = (
+        (grp["avg_tickets"] / max_tickets * 100).round(1) if max_tickets > 0 else 0
+    )
+
+    grp["score"] = (
+        0.25 * grp["norm_tickets"]
+        + 0.25 * grp["avg_resolution"]
+        + 0.25 * grp["vol_hit"]
+        + 0.25 * grp["res_hit"]
+    ).round(1)
+
+    grp = grp.sort_values("score", ascending=False).reset_index(drop=True)
+    grp.index += 1
+
+    result = grp.rename(columns={
+        ASSIGNEE_COL: "Assignee",
+        "avg_tickets": "Avg Tickets",
+        "avg_resolution": "Avg Resolution %",
+        "vol_hit": "Volume Hit %",
+        "res_hit": "Resolution Hit %",
+        "score": "Overall Score",
+    })
+    result["Rank"] = range(1, len(result) + 1)
+    return result[["Rank", "Assignee", "Avg Tickets", "Avg Resolution %",
+                    "Volume Hit %", "Resolution Hit %", "Overall Score"]]
+
+
 def run():
     st.set_page_config(page_title="MoM SMAX Analyst", layout="wide")
     st.title("MoM SMAX Assignee Analysis")
@@ -229,6 +285,22 @@ def run():
     compliance["Volume %"] = (compliance["volume_ok"] / compliance["months"] * 100).round(1)
     compliance["Resolution %"] = (compliance["resolution_ok"] / compliance["months"] * 100).round(1)
     st.dataframe(compliance, width="stretch", hide_index=True)
+
+    # ── Best Performing Analyst ──────────────────────────────────────────
+    st.subheader("Best Performing Analyst")
+    ranking = _build_ranking(view, ticket_target, resolution_target)
+    if not ranking.empty:
+        top = ranking.iloc[0]
+        st.success(
+            f"**{top['Assignee']}** leads with an overall score of "
+            f"**{top['Overall Score']:.1f}** — Avg tickets {top['Avg Tickets']:.0f}/mo, "
+            f"Resolution {top['Avg Resolution %']:.1f}%, "
+            f"Volume hit rate {top['Volume Hit %']:.0f}%, "
+            f"Resolution hit rate {top['Resolution Hit %']:.0f}%"
+        )
+        st.dataframe(ranking, width="stretch", hide_index=True)
+    else:
+        st.info("Not enough data to rank analysts.")
 
     # Export
     st.download_button(
